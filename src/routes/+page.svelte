@@ -10,6 +10,11 @@
 	import FaCog from 'svelte-icons/fa/FaCog.svelte';
 	import Check from '$lib/Check.svelte';
 
+	import { copy } from 'svelte-copy';
+	import FaCopy from 'svelte-icons/fa/FaCopy.svelte';
+
+	import { SvelteToast, toast } from '@zerodevx/svelte-toast';
+
 	let fileInput: HTMLInputElement;
 
 	let uploadUuid = '';
@@ -243,12 +248,31 @@
 				</p>
 			</div>
 		{:else if stage === 'finished'}
-			<input
-				disabled
-				class="input"
-				type="text"
-				value={`${window.location.href}download/${uploadUuid}#${uploadKey}`}
-			/>
+			<div class="link-parent">
+				<input
+					disabled
+					class="input"
+					type="text"
+					value={`${window.location.href}download/${uploadUuid}#${uploadKey}`}
+				/>
+				<button
+					class="copy"
+					use:copy={`${window.location.href}download/${uploadUuid}#${uploadKey}`}
+					on:click={() => {
+						toast.push('Copied link to clipboard', {
+							theme: {
+								'--toastColor': 'mintcream',
+								'--toastBackground': 'rgba(72,187,120,0.9)',
+								'--toastBarBackground': '#2F855A'
+							}
+						});
+					}}
+				>
+					<div class="icon">
+						<FaCopy />
+					</div>
+				</button>
+			</div>
 			<button
 				class="upload"
 				on:click={() => {
@@ -269,6 +293,8 @@
 		/>
 	</div>
 </div>
+
+<SvelteToast />
 
 <style lang="scss">
 	.parent {
@@ -298,6 +324,26 @@
 			margin: 0 12px;
 			padding: 32px;
 			color: white;
+
+			.link-parent {
+				display: flex;
+				gap: 0.5rem;
+
+				.copy {
+					@extend .upload;
+					width: 3rem;
+					display: flex;
+					justify-content: center;
+					align-items: center;
+
+					.icon {
+						width: 1rem;
+						display: flex;
+						justify-content: center;
+						align-items: center;
+					}
+				}
+			}
 
 			.upload-limit {
 				text-align: center;
