@@ -55,7 +55,7 @@
 		} = await metadataRes.json();
 
 		if (!metadata.success) {
-            alert(metadata.message);
+			alert(metadata.message);
 			return;
 		}
 
@@ -136,6 +136,14 @@
 		a.click();
 	};
 </script>
+
+<svelte:head>
+	<title>Horizon Send - Secure File Sharing</title>
+	<meta
+		name="description"
+		content="Someone shared an encrypted file with you. Visit the link to decrypt and download it."
+	/>
+</svelte:head>
 
 <div class="parent">
 	<div class="container">

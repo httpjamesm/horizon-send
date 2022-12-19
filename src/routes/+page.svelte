@@ -190,6 +190,14 @@
 	};
 </script>
 
+<svelte:head>
+	<title>Horizon Send - Secure File Sharing</title>
+	<meta
+		name="description"
+		content="Horizon Send is a secure file sharing service that uses XChaCha20 end-to-end zero-knowledge encryption to protect your files."
+	/>
+</svelte:head>
+
 <div class="parent">
 	<div class="container">
 		<h1>Horizon Send</h1>
