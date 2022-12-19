@@ -1,0 +1,369 @@
+<script lang="ts">
+	import _sodium from 'libsodium-wrappers';
+
+	import axios from 'axios';
+
+	import { PUBLIC_API_URL } from '$env/static/public';
+
+	import FaCog from 'svelte-icons/fa/FaCog.svelte';
+	import Check from '$lib/Check.svelte';
+
+	let fileInput: HTMLInputElement;
+
+	let uploadUuid = '';
+	let uploadKey = '';
+
+	let stage: 'upload' | 'uploading' | 'finished' = 'upload';
+
+	let progress = 0;
+
+	let showMaxDownloads = false;
+
+	let maxDownloads = 0;
+
+	let showOptions = false;
+
+	// get the file
+	const encryptAndUpload = async (e: Event) => {
+		const files = (<HTMLInputElement>e.target).files;
+		if (!files) return;
+		// get the file contents
+		const file = files[0];
+
+		// create reader
+		const reader = new FileReader();
+
+		// read the file
+		reader.readAsArrayBuffer(file);
+
+		// wait for the file to be read
+		await new Promise((resolve) => {
+			reader.onload = resolve;
+		});
+
+		const fileContents = reader.result as ArrayBuffer;
+
+		// get the sodium library
+		await _sodium.ready;
+		const sodium = _sodium;
+
+		// generate a random key
+		const key = sodium.randombytes_buf(sodium.crypto_secretstream_xchacha20poly1305_KEYBYTES);
+
+		// convert key to b64
+		const keyB64 = sodium.to_base64(key, sodium.base64_variants.URLSAFE_NO_PADDING);
+
+		// create random salt
+		const saltBytes = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
+
+		// convert saltBytes to b64
+		const saltB64 = sodium.to_base64(saltBytes, sodium.base64_variants.URLSAFE_NO_PADDING);
+
+		// hash key with argon2id
+		const hashedKeyString = _sodium.crypto_pwhash(
+			32,
+			keyB64,
+			saltBytes,
+			3, // operations limit
+			1024 * 1024 * 64, // memory limit (8MB)
+			_sodium.crypto_pwhash_ALG_ARGON2ID13,
+			'base64'
+		);
+
+		// create a new state
+		const dataState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
+
+		// encrypt the file
+		const encryptedFile = sodium.crypto_secretstream_xchacha20poly1305_push(
+			dataState.state,
+			new Uint8Array(fileContents),
+			null,
+			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+		);
+
+		// get the header
+		const dataHeader = dataState.header;
+
+		// convert header to base64
+		const headerBase64 = sodium.to_base64(dataHeader, sodium.base64_variants.URLSAFE_NO_PADDING);
+
+		// get the file name
+		const fileName = file.name;
+
+		// create a new state for the name
+		const nameState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
+
+		const enc = new TextEncoder();
+
+		// encrypt the file name
+		const encryptedFileName = sodium.crypto_secretstream_xchacha20poly1305_push(
+			nameState.state,
+			enc.encode(fileName),
+			null,
+			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+		);
+
+		const encryptedFileNameBase64 = sodium.to_base64(
+			encryptedFileName,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		// get the header
+		const nameHeader = nameState.header;
+
+		// convert header to base64
+		const nameHeaderBase64 = sodium.to_base64(
+			nameHeader,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		// encrypt mime
+		const mimeState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
+
+		const encryptedMime = sodium.crypto_secretstream_xchacha20poly1305_push(
+			mimeState.state,
+			enc.encode(file.type),
+			null,
+			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+		);
+
+		const encryptedMimeBase64 = sodium.to_base64(
+			encryptedMime,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		const mimeHeaderB64 = sodium.to_base64(
+			mimeState.header,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		// create a new form data object
+		let formData = new FormData();
+		formData.append('data', new Blob([encryptedFile], { type: 'application/octet-stream' }));
+		formData.append('data_header', headerBase64);
+		formData.append('name', encryptedFileNameBase64);
+		formData.append('name_header', nameHeaderBase64);
+		formData.append('hashed_key', hashedKeyString);
+		formData.append('hashed_key_salt', saltB64);
+		formData.append('max_downloads', showMaxDownloads ? maxDownloads.toString() : '0');
+		formData.append('mime', encryptedMimeBase64);
+		formData.append('mime_header', mimeHeaderB64);
+
+		stage = 'uploading';
+
+		const res = await axios.post(`${PUBLIC_API_URL}/upload`, formData, {
+			// @ts-ignore
+			onUploadProgress: (e: { loaded: number; total: number }) => {
+				progress = e.loaded / e.total;
+			}
+		});
+
+		const data: {
+			data: string;
+		} = res.data;
+
+		uploadUuid = data.data;
+		uploadKey = `${keyB64},${saltB64}`;
+		stage = 'finished';
+
+		progress = 0;
+	};
+</script>
+
+<div class="parent">
+	<div class="container">
+		<h1>Horizon Send</h1>
+		<h2>End-to-end encrypted file sharing.</h2>
+		<p>
+			Horizon Send protects your uploads with zero-knowledge encryption. No one except those you
+			share the link with, including Horizon developers, can access your shared content.
+		</p>
+		{#if stage === 'upload'}
+			<button
+				class="upload"
+				on:click={() => {
+					if (!fileInput) return;
+					fileInput.click();
+				}}>Upload Securely</button
+			>
+			<div class="options-toggle-parent">
+				<!-- svelte-ignore a11y-click-events-have-key-events -->
+				<div
+					class="options-toggle"
+					on:click={() => {
+						showOptions = !showOptions;
+					}}
+				>
+					<div class="icon">
+						<FaCog />
+					</div>
+					<p>Options</p>
+				</div>
+			</div>
+			{#if showOptions}
+				<div class="options">
+					<div class="option">
+						<Check
+							selected={showMaxDownloads}
+							label="Set Download Limit"
+							style="margin-top: .5rem;"
+							changeSelected={() => {
+								showMaxDownloads = !showMaxDownloads;
+							}}
+						/>
+						{#if showMaxDownloads}
+							<input type="number" min="1" bind:value={maxDownloads} />
+						{/if}
+					</div>
+				</div>
+			{/if}
+		{:else if stage === 'uploading'}
+			<div style="display: flex; gap: 1rem; align-items: center;">
+				<progress class="progress-bar" value={progress} max="1" />
+				<p style="width: 2rem;">
+					{Math.ceil(progress * 100)}%
+				</p>
+			</div>
+		{:else if stage === 'finished'}
+			<input
+				disabled
+				class="input"
+				type="text"
+				value={`${window.location.href}download/${uploadUuid}#${uploadKey}`}
+			/>
+			<button
+				class="upload"
+				on:click={() => {
+					stage = 'upload';
+				}}>Upload Another</button
+			>
+		{/if}
+
+		<input
+			style="display: none"
+			type="file"
+			id="file"
+			accept="*/*"
+			bind:this={fileInput}
+			on:change={(e) => {
+				encryptAndUpload(e);
+			}}
+		/>
+	</div>
+</div>
+
+<style lang="scss">
+	.parent {
+		width: 100vw;
+		height: 100vh;
+		background-image: url('/images/background.jpg');
+		background-size: cover;
+		background-repeat: no-repeat;
+
+		display: flex;
+		justify-content: center;
+		align-items: center;
+
+		.container {
+			display: flex;
+			justify-content: center;
+			flex-direction: column;
+			background-color: #1b1b58;
+			border: 1px solid rgb(54, 50, 121);
+			border-radius: 20px;
+			padding: 2rem;
+			margin: 0.5rem;
+			transition-duration: 0.25s;
+			box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 10px;
+			height: fit-content;
+			max-width: 20rem;
+			margin: 0 12px;
+			padding: 32px;
+			color: white;
+
+			.options-toggle-parent {
+				width: 100%;
+				display: flex;
+				justify-content: flex-end;
+
+				.options-toggle {
+					margin-top: 0.5rem;
+
+					color: #2e2eb3;
+
+					display: flex;
+					align-items: center;
+					gap: 0.25rem;
+
+					width: fit-content;
+
+					.icon {
+						width: 1rem;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+					}
+
+					padding: 0.5rem;
+					box-sizing: border-box;
+					cursor: pointer;
+					user-select: none;
+
+					transition-duration: 0.5s;
+
+					border-radius: 10px;
+
+					&:hover {
+						background-color: rgba(255, 255, 255, 0.04);
+					}
+				}
+			}
+
+			.progress-bar {
+				width: 100%;
+
+				-webkit-appearance: none;
+				appearance: none;
+				background: transparent;
+				border-radius: 50px;
+				border: 0;
+			}
+
+			.progress-bar::-webkit-progress-value {
+				background: #3e3eb3;
+				border-radius: 50px;
+				border: 0;
+			}
+			.upload {
+				background-color: #2e2eb3;
+				cursor: pointer;
+				border: rgb(54, 50, 121);
+				color: white;
+				border-radius: 10px;
+				padding: 0.5rem;
+				box-sizing: border-box;
+				height: 3rem;
+				margin-top: 1rem;
+
+				&:hover {
+					background-color: #3e3eb3;
+				}
+			}
+
+			.input {
+				width: 100%;
+				height: 3rem;
+				margin-top: 1rem;
+				background-color: rgb(10, 10, 72);
+				color: white;
+				transition-duration: 0.25s;
+				padding: 0.5rem;
+				box-sizing: border-box;
+				border: 2px solid transparent;
+				font-size: 1rem;
+
+				border-radius: 10px;
+			}
+		}
+	}
+</style>
