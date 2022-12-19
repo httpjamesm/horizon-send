@@ -34,6 +34,7 @@
 	"dependencies": {
 		"axios": "^1.2.1",
 		"libsodium-wrappers": "^0.7.10",
-		"svelte-icons": "^2.1.0"
+		"svelte-icons": "^2.1.0",
+		"svelte-turnstile": "^0.3.1"
 	}
 }

@@ -3,7 +3,9 @@
 
 	import axios from 'axios';
 
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { PUBLIC_API_URL, PUBLIC_TURNSTILE_KEY } from '$env/static/public';
+
+	import { Turnstile } from 'svelte-turnstile';
 
 	import FaCog from 'svelte-icons/fa/FaCog.svelte';
 	import Check from '$lib/Check.svelte';
@@ -13,7 +15,7 @@
 	let uploadUuid = '';
 	let uploadKey = '';
 
-	let stage: 'upload' | 'uploading' | 'finished' = 'upload';
+	let stage: 'verifying' | 'upload' | 'uploading' | 'finished' = 'verifying';
 
 	let progress = 0;
 
@@ -22,6 +24,8 @@
 	let maxDownloads = 0;
 
 	let showOptions = false;
+
+	let turnstileToken = '';
 
 	// get the file
 	const encryptAndUpload = async (e: Event) => {
@@ -148,6 +152,7 @@
 		formData.append('max_downloads', showMaxDownloads ? maxDownloads.toString() : '0');
 		formData.append('mime', encryptedMimeBase64);
 		formData.append('mime_header', mimeHeaderB64);
+		formData.append('turnstile', turnstileToken);
 
 		stage = 'uploading';
 
@@ -168,6 +173,11 @@
 
 		progress = 0;
 	};
+
+	const turnstileCallback = (token: { detail: { token: string } }) => {
+		turnstileToken = token.detail.token;
+		stage = 'upload';
+	};
 </script>
 
 <div class="parent">
@@ -178,7 +188,9 @@
 			Horizon Send protects your uploads with zero-knowledge encryption. No one except those you
 			share the link with, including Horizon developers, can access your shared content.
 		</p>
-		{#if stage === 'upload'}
+		{#if stage === 'verifying'}
+			<p class="verifying">Please wait while we verify your humanity...</p>
+		{:else if stage === 'upload'}
 			<button
 				class="upload"
 				on:click={() => {
@@ -234,10 +246,12 @@
 			<button
 				class="upload"
 				on:click={() => {
-					stage = 'upload';
+					window.location.reload();
 				}}>Upload Another</button
 			>
 		{/if}
+
+		<Turnstile siteKey={PUBLIC_TURNSTILE_KEY} on:turnstile-callback={turnstileCallback} />
 
 		<input
 			style="display: none"
@@ -245,9 +259,7 @@
 			id="file"
 			accept="*/*"
 			bind:this={fileInput}
-			on:change={(e) => {
-				encryptAndUpload(e);
-			}}
+			on:change={encryptAndUpload}
 		/>
 	</div>
 </div>
@@ -365,5 +377,9 @@
 				border-radius: 10px;
 			}
 		}
+	}
+
+	.verifying {
+		color: rgb(84, 255, 158);
 	}
 </style>

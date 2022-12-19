@@ -1491,6 +1491,11 @@ svelte-preprocess@^4.0.0:
     sorcery "^0.10.0"
     strip-indent "^3.0.0"
 
+svelte-turnstile@^0.3.1:
+  version "0.3.1"
+  resolved "https://registry.yarnpkg.com/svelte-turnstile/-/svelte-turnstile-0.3.1.tgz#13063b25a79230611f29b6fa3adcd1d08d83a8ff"
+  integrity sha512-b0A90zMMjm0U0S1zOP9R+msnG8+kBJNspBiLVzwaH7uOUmjFLt8ujArqlHWQhXj+bRZEMM2dXIYBykVDku7pXg==
+
 svelte@^3.54.0:
   version "3.55.0"
   resolved "https://registry.yarnpkg.com/svelte/-/svelte-3.55.0.tgz#29cb958750a23e751309a6535ccd811fcabc9038"
