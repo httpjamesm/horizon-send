@@ -3,7 +3,7 @@
 
 	import axios from 'axios';
 
-	import { PUBLIC_API_URL, PUBLIC_TURNSTILE_KEY } from '$env/static/public';
+	import { PUBLIC_API_URL, PUBLIC_TURNSTILE_KEY, PUBLIC_UPLOAD_LIMIT } from '$env/static/public';
 
 	import { Turnstile } from 'svelte-turnstile';
 
@@ -33,6 +33,11 @@
 		if (!files) return;
 		// get the file contents
 		const file = files[0];
+
+		if (file.size > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
+			alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+			return;
+		}
 
 		// create reader
 		const reader = new FileReader();
@@ -198,6 +203,7 @@
 					fileInput.click();
 				}}>Upload Securely</button
 			>
+			<p class="upload-limit">Max {PUBLIC_UPLOAD_LIMIT} MB</p>
 			<div class="options-toggle-parent">
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<div
@@ -292,6 +298,11 @@
 			margin: 0 12px;
 			padding: 32px;
 			color: white;
+
+			.upload-limit {
+				text-align: center;
+				font-size: 0.75rem;
+			}
 
 			.options-toggle-parent {
 				width: 100%;
