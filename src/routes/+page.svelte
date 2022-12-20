@@ -457,6 +457,10 @@
 				border: 0;
 			}
 
+			.progress-bar::-webkit-progress-bar {
+				border-radius: 50px;
+			}
+
 			.progress-bar::-webkit-progress-value {
 				background: #3e3eb3;
 				border-radius: 50px;

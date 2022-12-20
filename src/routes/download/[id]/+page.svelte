@@ -5,6 +5,12 @@
 
 	import { PUBLIC_API_URL } from '$env/static/public';
 
+	import axios from 'axios';
+
+	let progress = 0;
+
+	let isDownloading = false;
+
 	const downloadFile = async () => {
 		// get key from the #
 		const fragment = window.location.hash.substring(1);
@@ -59,14 +65,21 @@
 			return;
 		}
 
-		const res = await fetch(`${PUBLIC_API_URL}/download/${$page.params.id}`);
+		isDownloading = true;
 
-		if (!res.ok) {
+		const res = await axios.get(`${PUBLIC_API_URL}/download/${$page.params.id}`, {
+			onDownloadProgress: (progressEvent) => {
+				// @ts-ignore
+				progress = progressEvent.loaded / progressEvent.total;
+			}
+		});
+
+		if (res.status !== 200) {
 			alert('Unable to download encrypted file');
 			return;
 		}
 
-		const file = await res.arrayBuffer();
+		const file = res.data as ArrayBuffer;
 
 		// get the header
 		const dataHeader = _sodium.from_base64(
@@ -150,7 +163,16 @@
 		<h1>Horizon Send</h1>
 		<h2>End-to-end encrypted file sharing.</h2>
 		<p>Someone shared an encrypted file with you. Click the button below to download it.</p>
-		<button class="upload" on:click={downloadFile}>Download</button>
+		{#if isDownloading}
+			<div style="display: flex; gap: 1rem; align-items: center;">
+				<progress class="progress-bar" value={progress} max="1" />
+				<p style="width: 2rem;">
+					{Math.ceil(progress * 100)}%
+				</p>
+			</div>
+		{:else}
+			<button class="upload" on:click={downloadFile}>Download</button>
+		{/if}
 	</div>
 </div>
 
@@ -182,6 +204,25 @@
 			margin: 0 12px;
 			padding: 32px;
 			color: white;
+
+			.progress-bar {
+				width: 100%;
+
+				-webkit-appearance: none;
+				appearance: none;
+				border-radius: 50px;
+				border: 0;
+			}
+
+			.progress-bar::-webkit-progress-bar {
+				border-radius: 50px;
+			}
+
+			.progress-bar::-webkit-progress-value {
+				background: #3e3eb3;
+				border-radius: 50px;
+				border: 0;
+			}
 
 			.upload {
 				background-color: #2e2eb3;
