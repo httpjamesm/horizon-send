@@ -71,7 +71,8 @@
 			onDownloadProgress: (progressEvent) => {
 				// @ts-ignore
 				progress = progressEvent.loaded / progressEvent.total;
-			}
+			},
+            responseType: 'arraybuffer',
 		});
 
 		if (res.status !== 200) {
