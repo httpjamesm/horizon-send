@@ -58,6 +58,8 @@
 
 		const fileContents = reader.result as ArrayBuffer;
 
+        const uIntFileContents = new Uint8Array(fileContents);
+
 		// get the sodium library
 		await _sodium.ready;
 		const sodium = _sodium;
@@ -91,7 +93,7 @@
 		// encrypt the file
 		const encryptedFile = sodium.crypto_secretstream_xchacha20poly1305_push(
 			dataState.state,
-			new Uint8Array(fileContents),
+			uIntFileContents,
 			null,
 			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
 		);
