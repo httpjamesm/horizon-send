@@ -17,6 +17,10 @@
 	let decryptedMime = '';
 	let fileSize = 0;
 
+	let fileKey: Uint8Array | null = null;
+	let keySalt: Uint8Array | null = null;
+	let hashedFileKey = '';
+
 	interface metadataData {
 		encrypted_name: string;
 		encrypted_name_header: string;
@@ -32,13 +36,14 @@
 
 	onMount(() => {
 		if (browser) {
-			getMetadata();
+			getCryptoData().then(() => getMetadata());
 		}
 	});
 
 	const getMetadata = async () => {
-		const { key, salt, hashedKey } = await getCryptoData();
-
+		const hashedKey = hashedFileKey;
+		const key = fileKey;
+		const salt = keySalt;
 		if (!key || !salt || !hashedKey) return;
 
 		const metadataRes = await fetch(
@@ -108,21 +113,26 @@
 		// get key from the #
 		const fragment = window.location.hash.substring(1);
 
-		const fragmentSplit = fragment.split(',');
-
-		if (fragmentSplit.length < 2) {
-			alert('Invalid URL');
-			throw 'Invalid key data in URL';
-		}
-
-		const keyB64 = fragmentSplit[0];
-
-		const saltB64 = fragmentSplit[1];
+		const keyB64 = fragment;
 
 		// decode
 		const key = _sodium.from_base64(keyB64, _sodium.base64_variants.URLSAFE_NO_PADDING);
 
-		const salt = _sodium.from_base64(saltB64, _sodium.base64_variants.URLSAFE_NO_PADDING);
+		// get salt from server
+		const saltRes = await fetch(`${PUBLIC_API_URL}/argon_salt/${$page.params.id}`);
+
+		const saltData: {
+			success: boolean;
+			message: string;
+			data: string;
+		} = await saltRes.json();
+
+		if (!saltData.success) {
+			alert(saltData.message);
+			throw 'Unable to retrieve salt';
+		}
+
+		const salt = _sodium.from_base64(saltData.data, _sodium.base64_variants.URLSAFE_NO_PADDING);
 
 		const hashedKey = _sodium.crypto_pwhash(
 			32,
@@ -134,17 +144,17 @@
 			'base64'
 		);
 
-		return {
-			key,
-			salt,
-			hashedKey
-		};
+		fileKey = key;
+		keySalt = salt;
+		hashedFileKey = hashedKey;
 	};
 
 	const downloadFile = async () => {
-		const { key, salt, hashedKey } = await getCryptoData();
+		const hashedKey = hashedFileKey;
+		const key = fileKey;
+		const salt = keySalt;
 
-		if (!key || !salt) return;
+		if (!key || !salt || !hashedKey) return;
 
 		isDownloading = true;
 

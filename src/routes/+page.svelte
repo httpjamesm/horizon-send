@@ -58,7 +58,7 @@
 
 		const fileContents = reader.result as ArrayBuffer;
 
-        const uIntFileContents = new Uint8Array(fileContents);
+		const uIntFileContents = new Uint8Array(fileContents);
 
 		// get the sodium library
 		await _sodium.ready;
@@ -182,7 +182,7 @@
 		} = res.data;
 
 		uploadUuid = data.data;
-		uploadKey = `${keyB64},${saltB64}`;
+		uploadKey = `${keyB64}`;
 		stage = 'finished';
 
 		progress = 0;
