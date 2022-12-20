@@ -230,7 +230,9 @@
 		<h1>Horizon Send</h1>
 		<h2>End-to-end encrypted file sharing.</h2>
 		<p>Someone shared an encrypted file with you. Click the button below to download it.</p>
-		<p class="preview-details">{decryptedName} • {decryptedMime} • {Math.ceil(fileSize / 1024 / 1024)} MB</p>
+		<p class="preview-details">
+			{decryptedName} • {decryptedMime} • {Math.ceil(fileSize / 1024 / 1024)} MB
+		</p>
 		{#if isDownloading}
 			<div style="display: flex; gap: 1rem; align-items: center;">
 				<progress class="progress-bar" value={progress} max="1" />
@@ -239,7 +241,9 @@
 				</p>
 			</div>
 		{:else}
-			<button class="upload" on:click={downloadFile}>Download</button>
+			<button class="download" on:click={downloadFile} disabled={!decryptedName}
+				>{#if !decryptedName}Decrypting...{:else}Download{/if}</button
+			>
 		{/if}
 	</div>
 </div>
@@ -273,9 +277,9 @@
 			padding: 32px;
 			color: white;
 
-            .preview-details {
-                margin-top: 1rem;
-            }
+			.preview-details {
+				margin-top: 1rem;
+			}
 
 			.progress-bar {
 				width: 100%;
@@ -296,7 +300,7 @@
 				border: 0;
 			}
 
-			.upload {
+			.download {
 				background-color: #2e2eb3;
 				cursor: pointer;
 				border: rgb(54, 50, 121);
@@ -309,6 +313,11 @@
 
 				&:hover {
 					background-color: #3e3eb3;
+				}
+
+				&:disabled {
+					background-color: #7272ac;
+					cursor: not-allowed;
 				}
 			}
 		}
