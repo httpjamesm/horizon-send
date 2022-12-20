@@ -6,6 +6,8 @@
 	import { PUBLIC_API_URL, PUBLIC_B2_BRIDGE_URL } from '$env/static/public';
 
 	import axios from 'axios';
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 
 	let progress = 0;
 
@@ -27,6 +29,12 @@
 	}
 
 	let metadata: metadataData = {} as any;
+
+	onMount(() => {
+		if (browser) {
+			getMetadata();
+		}
+	});
 
 	const getMetadata = async () => {
 		const { key, salt, hashedKey } = await getCryptoData();
