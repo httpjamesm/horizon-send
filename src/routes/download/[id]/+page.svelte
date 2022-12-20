@@ -39,7 +39,7 @@
 	const getMetadata = async () => {
 		const { key, salt, hashedKey } = await getCryptoData();
 
-		if (!key || !salt) return;
+		if (!key || !salt || !hashedKey) return;
 
 		const metadataRes = await fetch(
 			`${PUBLIC_API_URL}/meta/${$page.params.id}?hashed_key=${hashedKey}`
@@ -88,9 +88,14 @@
 
 		const mimeState = _sodium.crypto_secretstream_xchacha20poly1305_init_pull(mimeHeader, key);
 
+		const encryptedMimeBytes = _sodium.from_base64(
+			metadata.encrypted_mime,
+			_sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
 		const decryptedMimeBytes = _sodium.crypto_secretstream_xchacha20poly1305_pull(
 			mimeState,
-			metadata.encrypted_mime,
+			encryptedMimeBytes,
 			null
 		);
 
@@ -98,6 +103,8 @@
 	};
 
 	const getCryptoData = async () => {
+		await _sodium.ready;
+
 		// get key from the #
 		const fragment = window.location.hash.substring(1);
 
@@ -223,7 +230,7 @@
 		<h1>Horizon Send</h1>
 		<h2>End-to-end encrypted file sharing.</h2>
 		<p>Someone shared an encrypted file with you. Click the button below to download it.</p>
-		<p>{decryptedName} • {decryptedMime} • {Math.ceil(fileSize / 1024 / 1024)} MB</p>
+		<p class="preview-details">{decryptedName} • {decryptedMime} • {Math.ceil(fileSize / 1024 / 1024)} MB</p>
 		{#if isDownloading}
 			<div style="display: flex; gap: 1rem; align-items: center;">
 				<progress class="progress-bar" value={progress} max="1" />
@@ -265,6 +272,10 @@
 			margin: 0 12px;
 			padding: 32px;
 			color: white;
+
+            .preview-details {
+                margin-top: 1rem;
+            }
 
 			.progress-bar {
 				width: 100%;
