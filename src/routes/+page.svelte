@@ -348,6 +348,10 @@
 			font-size: 0.75rem;
 			color: white;
 			width: 25rem;
+
+			@media only screen and (max-width: 800px) {
+				width: 90%;
+			}
 		}
 
 		.container {
