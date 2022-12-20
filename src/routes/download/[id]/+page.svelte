@@ -89,7 +89,7 @@
 
 		// download from the bridge
 		const res = await axios.get(
-			`${PUBLIC_B2_BRIDGE_URL}?uuid=${$page.params.uuid}&auth=${downloadRequestRes.data}`,
+			`${PUBLIC_B2_BRIDGE_URL}?uuid=${$page.params.id}&auth=${downloadRequestRes.data}`,
 			{
 				onDownloadProgress: (progressEvent) => {
 					// @ts-ignore
