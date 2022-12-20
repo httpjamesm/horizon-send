@@ -11,7 +11,85 @@
 
 	let isDownloading = false;
 
-	const downloadFile = async () => {
+	let decryptedName = '';
+	let decryptedMime = '';
+	let fileSize = 0;
+
+	interface metadataData {
+		encrypted_name: string;
+		encrypted_name_header: string;
+		data_header: string;
+		max_downloads: number;
+		expires_at: number;
+		encrypted_mime: string;
+		encrypted_mime_header: string;
+		size: number;
+	}
+
+	let metadata: metadataData = {} as any;
+
+	const getMetadata = async () => {
+		const { key, salt, hashedKey } = await getCryptoData();
+
+		if (!key || !salt) return;
+
+		const metadataRes = await fetch(
+			`${PUBLIC_API_URL}/meta/${$page.params.id}?hashed_key=${hashedKey}`
+		);
+
+		const metadataResponse: {
+			success: boolean;
+			message: string;
+			data: metadataData;
+		} = await metadataRes.json();
+
+		if (!metadataResponse.success) {
+			alert(metadataResponse.message);
+			throw 'Unable to get metadata';
+		}
+
+		metadata = metadataResponse.data;
+
+		// get the name header
+		const nameHeader = _sodium.from_base64(
+			metadata.encrypted_name_header,
+			_sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		// create a new state for the name
+		const nameState = _sodium.crypto_secretstream_xchacha20poly1305_init_pull(nameHeader, key);
+
+		// decrypt the file name
+		const decryptedFileNameBytes = _sodium.crypto_secretstream_xchacha20poly1305_pull(
+			nameState,
+			_sodium.from_base64(metadata.encrypted_name),
+			null
+		);
+
+		// decode name
+		const dec = new TextDecoder();
+		decryptedName = dec.decode(decryptedFileNameBytes.message);
+
+		fileSize = metadata.size;
+
+		// decrypt mime
+		const mimeHeader = _sodium.from_base64(
+			metadata.encrypted_mime_header,
+			_sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		const mimeState = _sodium.crypto_secretstream_xchacha20poly1305_init_pull(mimeHeader, key);
+
+		const decryptedMimeBytes = _sodium.crypto_secretstream_xchacha20poly1305_pull(
+			mimeState,
+			metadata.encrypted_mime,
+			null
+		);
+
+		decryptedMime = dec.decode(decryptedMimeBytes.message);
+	};
+
+	const getCryptoData = async () => {
 		// get key from the #
 		const fragment = window.location.hash.substring(1);
 
@@ -19,7 +97,7 @@
 
 		if (fragmentSplit.length < 2) {
 			alert('Invalid URL');
-			return;
+			throw 'Invalid key data in URL';
 		}
 
 		const keyB64 = fragmentSplit[0];
@@ -31,7 +109,6 @@
 
 		const salt = _sodium.from_base64(saltB64, _sodium.base64_variants.URLSAFE_NO_PADDING);
 
-		// hash key
 		const hashedKey = _sodium.crypto_pwhash(
 			32,
 			keyB64,
@@ -42,28 +119,17 @@
 			'base64'
 		);
 
-		const metadataRes = await fetch(
-			`${PUBLIC_API_URL}/meta/${$page.params.id}?hashed_key=${hashedKey}`
-		);
+		return {
+			key,
+			salt,
+			hashedKey
+		};
+	};
 
-		const metadata: {
-			success: boolean;
-			message: string;
-			data: {
-				encrypted_name: string;
-				encrypted_name_header: string;
-				data_header: string;
-				max_downloads: number;
-				expires_at: number;
-				encrypted_mime: string;
-				encrypted_mime_header: string;
-			};
-		} = await metadataRes.json();
+	const downloadFile = async () => {
+		const { key, salt, hashedKey } = await getCryptoData();
 
-		if (!metadata.success) {
-			alert(metadata.message);
-			return;
-		}
+		if (!key || !salt) return;
 
 		isDownloading = true;
 
@@ -103,42 +169,8 @@
 
 		// get the header
 		const dataHeader = _sodium.from_base64(
-			metadata.data.data_header,
+			metadata.data_header,
 			_sodium.base64_variants.URLSAFE_NO_PADDING
-		);
-
-		// get the name header
-		const nameHeader = _sodium.from_base64(
-			metadata.data.encrypted_name_header,
-			_sodium.base64_variants.URLSAFE_NO_PADDING
-		);
-
-		// create a new state for the name
-		const nameState = _sodium.crypto_secretstream_xchacha20poly1305_init_pull(nameHeader, key);
-
-		// decrypt the file name
-		const decryptedFileName = _sodium.crypto_secretstream_xchacha20poly1305_pull(
-			nameState,
-			_sodium.from_base64(metadata.data.encrypted_name),
-			null
-		);
-
-		// decode name
-		const dec = new TextDecoder();
-		const fileName = dec.decode(decryptedFileName.message);
-
-		// decrypt mime
-		const mimeHeader = _sodium.from_base64(
-			metadata.data.encrypted_mime_header,
-			_sodium.base64_variants.URLSAFE_NO_PADDING
-		);
-
-		const mimeState = _sodium.crypto_secretstream_xchacha20poly1305_init_pull(mimeHeader, key);
-
-		const decryptedMime = _sodium.crypto_secretstream_xchacha20poly1305_pull(
-			mimeState,
-			metadata.data.encrypted_mime,
-			null
 		);
 
 		// create a new state for the data
@@ -155,7 +187,7 @@
 
 		// create a new file
 		const newFile = new Blob([decryptedFile.message], {
-			type: dec.decode(decryptedMime.message) || 'application/octet-stream'
+			type: decryptedMime || 'application/octet-stream'
 		});
 
 		const url = URL.createObjectURL(newFile);
@@ -164,7 +196,7 @@
 
 		a.href = url;
 
-		a.download = fileName;
+		a.download = decryptedName;
 
 		a.click();
 	};
@@ -183,6 +215,7 @@
 		<h1>Horizon Send</h1>
 		<h2>End-to-end encrypted file sharing.</h2>
 		<p>Someone shared an encrypted file with you. Click the button below to download it.</p>
+		<p>{decryptedName} • {decryptedMime} • {Math.ceil(fileSize / 1024 / 1024)} MB</p>
 		{#if isDownloading}
 			<div style="display: flex; gap: 1rem; align-items: center;">
 				<progress class="progress-bar" value={progress} max="1" />
