@@ -3,7 +3,7 @@
 
 	import { page } from '$app/stores';
 
-	import { PUBLIC_API_URL } from '$env/static/public';
+	import { PUBLIC_API_URL, PUBLIC_B2_BRIDGE_URL } from '$env/static/public';
 
 	import axios from 'axios';
 
@@ -67,18 +67,37 @@
 
 		isDownloading = true;
 
-		const res = await axios.get(`${PUBLIC_API_URL}/download/${$page.params.id}`, {
-			onDownloadProgress: (progressEvent) => {
-				// @ts-ignore
-				progress = progressEvent.loaded / progressEvent.total;
-			},
-            responseType: 'arraybuffer',
-		});
+		const dlRequest = await fetch(
+			`${PUBLIC_API_URL}/download/${$page.params.id}?hashed_key=${hashedKey}`
+		);
 
-		if (res.status !== 200) {
-			alert('Unable to download encrypted file');
+		if (dlRequest.status !== 200) {
+			alert('Unable to get encrypted file auth');
 			return;
 		}
+
+		const downloadRequestRes: {
+			success: boolean;
+			message: string;
+			data: string;
+		} = await dlRequest.json();
+
+		if (!downloadRequestRes.success) {
+			alert(downloadRequestRes.message);
+			return;
+		}
+
+		// download from the bridge
+		const res = await axios.get(
+			`${PUBLIC_B2_BRIDGE_URL}?uuid=${$page.params.uuid}&auth=${downloadRequestRes.data}`,
+			{
+				onDownloadProgress: (progressEvent) => {
+					// @ts-ignore
+					progress = progressEvent.loaded / progressEvent.total;
+				},
+				responseType: 'arraybuffer'
+			}
+		);
 
 		const file = res.data as ArrayBuffer;
 
