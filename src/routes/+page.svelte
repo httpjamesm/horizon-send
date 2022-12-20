@@ -312,6 +312,20 @@
 			on:change={encryptAndUpload}
 		/>
 	</div>
+	<div class="disclaimers">
+		<p>
+			Your IP address is stored irreversibly hashed to prevent abuse. It is permanently deleted
+			after its associated file expires.
+		</p>
+		<p>
+			<a href="https://horizon.pics" target="_blank" rel="noopener noreferrer">Horizon</a> •
+			<a href="https://github.com/httpjamesm/horizon-send" target="_blank" rel="noopener noreferrer"
+				>Source</a
+			>
+			• <a href="https://httpjames.space" target="_blank" rel="noopener noreferrer">http.james</a>
+			{new Date().getFullYear()}
+		</p>
+	</div>
 </div>
 
 <SvelteToast />
@@ -327,6 +341,14 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
+		flex-direction: column;
+
+		.disclaimers {
+			text-align: center;
+			font-size: 0.75rem;
+			color: white;
+			width: 25rem;
+		}
 
 		.container {
 			display: flex;
@@ -335,12 +357,12 @@
 			background-color: #1b1b58;
 			border: 1px solid rgb(54, 50, 121);
 			border-radius: 20px;
-			padding: 2rem;
+			box-sizing: border-box;
 			margin: 0.5rem;
 			transition-duration: 0.25s;
 			box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 10px;
 			height: fit-content;
-			max-width: 20rem;
+			width: 22rem;
 			margin: 0 12px;
 			padding: 32px;
 			color: white;
