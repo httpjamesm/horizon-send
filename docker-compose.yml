@@ -9,8 +9,5 @@ services:
       network: 'host'
     ports:
       - "3000:3000"
-    environment:
-      - PUBLIC_API_URL="https://send-api.hrzn.cool"
-      - PUBLIC_TURNSTILE_KEY="0x0000"
-      - PUBLIC_UPLOAD_LIMIT=25
+    env_file: .env
     restart: always
