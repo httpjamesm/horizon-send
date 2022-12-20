@@ -1,4 +1,6 @@
 <script lang="ts">
+	import FaCheck from 'svelte-icons/fa/FaCheck.svelte';
+
 	export let selected = false;
 	export let changeSelected: () => void;
 	export let label = '';
@@ -7,7 +9,13 @@
 
 <div class="parent" {style}>
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div class={`container${selected ? ' sel' : ''}`} on:click={changeSelected} />
+	<div class={`container${selected ? ' sel' : ''}`} on:click={changeSelected}>
+		{#if selected}
+			<div class="icon">
+				<FaCheck />
+			</div>
+		{/if}
+	</div>
 	{#if label}
 		<p>{label}</p>
 	{/if}
@@ -34,6 +42,14 @@
 
 	.sel {
 		background-color: #2e2eb3;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		color: white;
+        
+        .icon {
+            width: .75rem;
+        }
 	}
 
 	.parent {

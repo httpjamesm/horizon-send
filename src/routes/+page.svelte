@@ -27,6 +27,7 @@
 	let showMaxDownloads = false;
 
 	let maxDownloads = 0;
+	let expiresAfter: 3600 | 21600 | 86400 | 259200 | 604800 = 604800;
 
 	let showOptions = false;
 
@@ -163,6 +164,7 @@
 		formData.append('mime', encryptedMimeBase64);
 		formData.append('mime_header', mimeHeaderB64);
 		formData.append('turnstile', turnstileToken);
+		formData.append('expires_after', expiresAfter.toString());
 
 		stage = 'uploading';
 
@@ -243,8 +245,18 @@
 							}}
 						/>
 						{#if showMaxDownloads}
-							<input type="number" min="1" bind:value={maxDownloads} />
+							<input type="number" min="1" max="20" bind:value={maxDownloads} class="input-field" />
 						{/if}
+					</div>
+					<div class="option">
+						<label for="expires-after">Expires After</label>
+						<select id="expires-after" bind:value={expiresAfter} class="input-field">
+							<option value={3600}>1 Hour</option>
+							<option value={21600}>6 Hours</option>
+							<option value={86400}>1 Day</option>
+							<option value={259200}>3 Days</option>
+							<option value={604800}>1 Week</option>
+						</select>
 					</div>
 				</div>
 			{/if}
@@ -392,6 +404,23 @@
 
 					&:hover {
 						background-color: rgba(255, 255, 255, 0.04);
+					}
+				}
+			}
+
+			.options {
+				.option {
+					.input-field {
+						margin-top: 0.5rem;
+						margin-bottom: 0.5rem;
+						background-color: #2e2eb3;
+						padding: 0.5rem;
+						box-sizing: border-box;
+						height: 2rem;
+						min-width: 5rem;
+						color: white;
+						border-radius: 5px;
+						border: none;
 					}
 				}
 			}
