@@ -14,6 +14,7 @@
 	import FaCopy from 'svelte-icons/fa/FaCopy.svelte';
 
 	import { SvelteToast, toast } from '@zerodevx/svelte-toast';
+	import FooterText from '$lib/FooterText.svelte';
 
 	let fileInput: HTMLInputElement;
 
@@ -319,14 +320,7 @@
 			Your IP address is stored irreversibly hashed to prevent abuse. It is permanently deleted
 			after its associated file expires.
 		</p>
-		<p>
-			<a href="https://horizon.pics" target="_blank" rel="noopener noreferrer">Horizon</a> •
-			<a href="https://github.com/httpjamesm/horizon-send" target="_blank" rel="noopener noreferrer"
-				>Source</a
-			>
-			• <a href="https://httpjames.space" target="_blank" rel="noopener noreferrer">http.james</a>
-			{new Date().getFullYear()}
-		</p>
+        <FooterText />
 	</div>
 </div>
 
@@ -350,6 +344,7 @@
 			font-size: 0.75rem;
 			color: white;
 			width: 25rem;
+            margin-top: .5rem;
 
 			@media only screen and (max-width: 800px) {
 				width: 90%;

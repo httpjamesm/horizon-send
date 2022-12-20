@@ -8,6 +8,7 @@
 	import axios from 'axios';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import FooterText from '$lib/FooterText.svelte';
 
 	let progress = 0;
 
@@ -268,6 +269,15 @@
 			>
 		{/if}
 	</div>
+	<div class="disclaimers">
+		{#if browser}
+			<a
+				href={`mailto:contact@horizon.pics?subject=Send Abuse Report&body=The following link contains abusive material: ${window.location.href}.`}
+				><p class="abuse">Report Abuse</p></a
+			>
+		{/if}
+        <FooterText />
+	</div>
 </div>
 
 <style lang="scss">
@@ -281,6 +291,23 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
+		flex-direction: column;
+
+		.disclaimers {
+			text-align: center;
+			font-size: 0.75rem;
+			color: white;
+			width: 25rem;
+			margin-top: 0.5rem;
+
+			@media only screen and (max-width: 800px) {
+				width: 90%;
+			}
+
+			.abuse {
+				color: rgb(255, 123, 123);
+			}
+		}
 
 		.container {
 			display: flex;
