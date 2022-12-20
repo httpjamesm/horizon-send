@@ -36,9 +36,14 @@
 
 	onMount(() => {
 		if (browser) {
-			getCryptoData().then(() => getMetadata());
+			init();
 		}
 	});
+
+	const init = async () => {
+		await getCryptoData();
+		await getMetadata();
+	};
 
 	const getMetadata = async () => {
 		const hashedKey = hashedFileKey;
@@ -113,7 +118,14 @@
 		// get key from the #
 		const fragment = window.location.hash.substring(1);
 
-		const keyB64 = fragment;
+		let keyB64 = fragment;
+
+		// backwards compatibility
+		if (fragment.includes(',')) {
+			// split and get [0]
+			const fragmentSplit = fragment.split(',');
+			keyB64 = fragmentSplit[0];
+		}
 
 		// decode
 		const key = _sodium.from_base64(keyB64, _sodium.base64_variants.URLSAFE_NO_PADDING);
