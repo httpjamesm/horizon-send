@@ -12,9 +12,15 @@
 
 	import { copy } from 'svelte-copy';
 	import FaCopy from 'svelte-icons/fa/FaCopy.svelte';
+	import FaQrcode from 'svelte-icons/fa/FaQrcode.svelte';
 
 	import { SvelteToast, toast } from '@zerodevx/svelte-toast';
 	import FooterText from '$lib/FooterText.svelte';
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+
+    import QR from "qrcode";
+    
 
 	let fileInput: HTMLInputElement;
 
@@ -33,6 +39,9 @@
 	let showOptions = false;
 
 	let turnstileToken = '';
+
+	let showQrCode = false;
+	let qrCodeData = '';
 
 	// get the file
 	const encryptAndUpload = async (e: Event) => {
@@ -179,21 +188,24 @@
 		});
 
 		const data: {
-            success: true;
-            message: string;
+			success: true;
+			message: string;
 			data: string;
 		} = res.data;
 
-        if (!data.success) {
-            alert(data.message);
-            throw `unable to upload file: ${data.message}`;
-        }
+		if (!data.success) {
+			alert(data.message);
+			throw `unable to upload file: ${data.message}`;
+		}
 
 		uploadUuid = data.data;
 		uploadKey = `${keyB64}`;
 		stage = 'finished';
 
 		progress = 0;
+
+
+        qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`)
 	};
 
 	const turnstileCallback = (token: { detail: { token: string } }) => {
@@ -302,7 +314,21 @@
 						<FaCopy />
 					</div>
 				</button>
+				<button
+					class="copy"
+					on:click={() => {
+						showQrCode = !showQrCode;
+					}}
+				>
+					<div class="icon">
+						<FaQrcode />
+					</div>
+				</button>
 			</div>
+			{#if showQrCode}
+				<div style="margin-top: 1rem;" />
+				<img src={qrCodeData} alt="Link QR Code" />
+			{/if}
 			<button
 				class="upload"
 				on:click={() => {
@@ -327,7 +353,7 @@
 			Your IP address is stored irreversibly hashed to prevent abuse. It is permanently deleted
 			after its associated file expires.
 		</p>
-        <FooterText />
+		<FooterText />
 	</div>
 </div>
 
@@ -351,7 +377,7 @@
 			font-size: 0.75rem;
 			color: white;
 			width: 25rem;
-            margin-top: .5rem;
+			margin-top: 0.5rem;
 
 			@media only screen and (max-width: 800px) {
 				width: 90%;
