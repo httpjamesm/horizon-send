@@ -19,7 +19,9 @@
 
 	import JSZip from 'jszip';
 
+	// @ts-ignore
 	import QR from 'qrcode';
+	import { splitFilesIntoChunks } from '$lib/utils/chunks';
 
 	let fileInput: HTMLInputElement;
 
@@ -43,6 +45,186 @@
 	let qrCodeData = '';
 
 	let isDragging = false;
+
+	const generateKeys = async () => {
+		// get the sodium library
+		await _sodium.ready;
+		const sodium = _sodium;
+
+		// generate a random key
+		const key = sodium.randombytes_buf(sodium.crypto_secretstream_xchacha20poly1305_KEYBYTES);
+
+		// convert key to b64
+		const keyB64 = sodium.to_base64(key, sodium.base64_variants.URLSAFE_NO_PADDING);
+
+		// create random salt
+		const saltBytes = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
+
+		// convert saltBytes to b64
+		const saltB64 = sodium.to_base64(saltBytes, sodium.base64_variants.URLSAFE_NO_PADDING);
+
+		// hash key with argon2id
+		const hashedKeyString = _sodium.crypto_pwhash(
+			32,
+			keyB64,
+			saltBytes,
+			3, // operations limit
+			1024 * 1024 * 64, // memory limit (8MB)
+			_sodium.crypto_pwhash_ALG_ARGON2ID13,
+			'base64'
+		);
+
+		return {
+			key,
+			keyB64,
+			saltB64,
+			hashedKeyString
+		};
+	};
+
+	const chunkUpload = async (name: string, mime: string, data: ArrayBuffer) => {
+		const chunks = await splitFilesIntoChunks(data);
+
+		const { key, keyB64, saltB64, hashedKeyString } = await generateKeys();
+
+		await _sodium.ready;
+		const sodium = _sodium;
+
+		// get the file name
+		let fileName = name;
+
+		// create a new state for the name
+		const nameState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
+
+		const enc = new TextEncoder();
+
+		// encrypt the file name
+		const encryptedFileName = sodium.crypto_secretstream_xchacha20poly1305_push(
+			nameState.state,
+			enc.encode(fileName),
+			null,
+			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+		);
+
+		const encryptedFileNameBase64 = sodium.to_base64(
+			encryptedFileName,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		// get the header
+		const nameHeader = nameState.header;
+
+		// convert header to base64
+		const nameHeaderBase64 = sodium.to_base64(
+			nameHeader,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		// encrypt mime
+		const mimeState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
+
+		let mimeType = mime;
+
+		const encryptedMime = sodium.crypto_secretstream_xchacha20poly1305_push(
+			mimeState.state,
+			enc.encode(mimeType),
+			null,
+			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+		);
+
+		const encryptedMimeBase64 = sodium.to_base64(
+			encryptedMime,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		const mimeHeaderB64 = sodium.to_base64(
+			mimeState.header,
+			sodium.base64_variants.URLSAFE_NO_PADDING
+		);
+
+		let formData = new FormData();
+		formData.append('total_chunks', chunks.length.toString());
+		formData.append('expected_size', data.byteLength.toString());
+		formData.append('name', encryptedFileNameBase64);
+		formData.append('name_header', nameHeaderBase64);
+		formData.append('hashed_key', hashedKeyString);
+		formData.append('hashed_key_salt', saltB64);
+		formData.append('max_downloads', showMaxDownloads ? maxDownloads.toString() : '0');
+		formData.append('mime', encryptedMimeBase64);
+		formData.append('mime_header', mimeHeaderB64);
+		formData.append('turnstile', turnstileToken);
+		formData.append('expires_after', expiresAfter.toString());
+
+		// first, create a transaction
+		const transactionRes = await fetch(`${PUBLIC_API_URL}/transaction`, {
+			method: 'POST',
+			body: formData
+		});
+
+		const transactionData: {
+			success: boolean;
+			message: string;
+			data: {
+				transactionUUID: string;
+				fileUUID: string;
+			};
+		} = await transactionRes.json();
+
+		if (!transactionData.success) {
+			alert(transactionData.message);
+			throw transactionData.message;
+		}
+
+		const transactionId = transactionData.data.transactionUUID;
+		const fileId = transactionData.data.fileUUID;
+
+		stage = 'uploading';
+
+		// upload each chunk
+		for (let i = 0; i < chunks.length; i++) {
+			// encrypt the chunk
+			const chunkState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
+
+			const encryptedChunk = sodium.crypto_secretstream_xchacha20poly1305_push(
+				chunkState.state,
+				new Uint8Array(chunks[i]),
+				null,
+				sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+			);
+
+			let formData = new FormData();
+			formData.append(
+				'data',
+				new Blob([encryptedChunk.buffer], { type: 'application/octet-stream' })
+			);
+			formData.append(
+				'data_header',
+				sodium.to_base64(chunkState.header, sodium.base64_variants.URLSAFE_NO_PADDING)
+			);
+
+			const res = await fetch(`${PUBLIC_API_URL}/chunk/${transactionId}/${i + 1}`, {
+				method: 'PUT',
+				body: formData
+			});
+
+			const data = await res.json();
+
+			if (!data.success) {
+				alert(data.message);
+				throw data.message;
+			}
+
+			progress = (i + 1) / chunks.length;
+		}
+
+		uploadUuid = fileId;
+		uploadKey = `${keyB64}`;
+		stage = 'finished';
+
+		progress = 0;
+
+		qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`);
+	};
 
 	// get the file
 	const encryptAndUpload = async (files: FileList) => {
@@ -92,33 +274,29 @@
 		}
 
 		const uIntFileContents = new Uint8Array(fileContents);
+		// get the file name
+		let fileName = file.name;
 
-		// get the sodium library
+		let mimeType = file.type;
+
+		if (files.length > 1) {
+			mimeType = 'application/zip';
+		}
+
+		if (files.length > 1) {
+			fileName = `send-archive-${new Date().getTime()}.zip`;
+		}
+
+		// if it's larger than 75 mb, we need to chunk upload
+		if (uIntFileContents.length > 75 * 1024 * 1024) {
+			await chunkUpload(fileName, mimeType, fileContents);
+			return;
+		}
+
+		const { key, keyB64, saltB64, hashedKeyString } = await generateKeys();
+
 		await _sodium.ready;
 		const sodium = _sodium;
-
-		// generate a random key
-		const key = sodium.randombytes_buf(sodium.crypto_secretstream_xchacha20poly1305_KEYBYTES);
-
-		// convert key to b64
-		const keyB64 = sodium.to_base64(key, sodium.base64_variants.URLSAFE_NO_PADDING);
-
-		// create random salt
-		const saltBytes = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
-
-		// convert saltBytes to b64
-		const saltB64 = sodium.to_base64(saltBytes, sodium.base64_variants.URLSAFE_NO_PADDING);
-
-		// hash key with argon2id
-		const hashedKeyString = _sodium.crypto_pwhash(
-			32,
-			keyB64,
-			saltBytes,
-			3, // operations limit
-			1024 * 1024 * 64, // memory limit (8MB)
-			_sodium.crypto_pwhash_ALG_ARGON2ID13,
-			'base64'
-		);
 
 		// create a new state
 		const dataState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
@@ -136,13 +314,6 @@
 
 		// convert header to base64
 		const headerBase64 = sodium.to_base64(dataHeader, sodium.base64_variants.URLSAFE_NO_PADDING);
-
-		// get the file name
-		let fileName = file.name;
-
-		if (files.length > 1) {
-			fileName = `send-archive-${new Date().getTime()}.zip`;
-		}
 
 		// create a new state for the name
 		const nameState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
@@ -173,12 +344,6 @@
 
 		// encrypt mime
 		const mimeState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
-
-		let mimeType = file.type;
-
-		if (files.length > 1) {
-			mimeType = 'application/zip';
-		}
 
 		const encryptedMime = sodium.crypto_secretstream_xchacha20poly1305_push(
 			mimeState.state,

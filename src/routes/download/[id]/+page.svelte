@@ -22,6 +22,8 @@
 	let keySalt: Uint8Array | null = null;
 	let hashedFileKey = '';
 
+	let isChunkedUpload = false;
+
 	interface metadataData {
 		encrypted_name: string;
 		encrypted_name_header: string;
@@ -31,6 +33,7 @@
 		encrypted_mime: string;
 		encrypted_mime_header: string;
 		size: number;
+		chunk_uploaded: boolean;
 	}
 
 	let metadata: metadataData = {} as any;
@@ -128,6 +131,11 @@
 			keyB64 = fragmentSplit[0];
 		}
 
+		// check if ?chunked is present
+		if (window.location.search.includes('chunked')) {
+			isChunkedUpload = true;
+		}
+
 		// decode
 		const key = _sodium.from_base64(keyB64, _sodium.base64_variants.URLSAFE_NO_PADDING);
 
@@ -162,6 +170,129 @@
 		hashedFileKey = hashedKey;
 	};
 
+	interface Chunk {
+		uuid: string;
+		transaction_uuid: string;
+		data_header: string;
+		chunk_number: number;
+		uploaded_at: number;
+	}
+	async function uInt8ArrayConcat(arrays: Uint8Array[]) {
+		// sum of individual array lengths
+		let totalLength = arrays.reduce((acc, value) => acc + value.length, 0);
+		if (!arrays.length) return null;
+		let result = new Uint8Array(totalLength);
+		// for each array - copy it over result
+		// next array is copied right after the previous one
+		let length = 0;
+		for (let array of arrays) {
+			result.set(array, length);
+			length += array.length;
+		}
+		return result;
+	}
+
+	const chunkDownload = async () => {
+		const hashedKey = hashedFileKey;
+		const key = fileKey;
+		const salt = keySalt;
+
+		if (!key || !salt || !hashedKey) return;
+
+		isDownloading = true;
+
+		// get chunks
+		const chunkRes = await fetch(
+			`${PUBLIC_API_URL}/chunks/${$page.params.id}?hashed_key=${hashedFileKey}`
+		);
+
+		const chunkData: {
+			success: boolean;
+			message: string;
+			data: Chunk[];
+		} = await chunkRes.json();
+
+		if (!chunkData.success) {
+			alert(chunkData.message);
+			throw 'Unable to retrieve chunks';
+		}
+
+		const chunksInfo = chunkData.data;
+
+		const totalChunks = chunksInfo.length;
+
+		let decryptedChunks: Uint8Array[] = [];
+
+		// go through all the chunks and download them
+		for (let i = 0; i < totalChunks; i++) {
+			const chunk = chunksInfo[i];
+
+			const chunkHeader = _sodium.from_base64(
+				chunk.data_header,
+				_sodium.base64_variants.URLSAFE_NO_PADDING
+			);
+
+			const chunkState = _sodium.crypto_secretstream_xchacha20poly1305_init_pull(chunkHeader, key);
+
+			const chunkRes = await fetch(
+				`${PUBLIC_API_URL}/chunk/${$page.params.id}/${chunk.uuid}?hashed_key=${hashedFileKey}`
+			);
+
+			const chunkData: {
+				success: boolean;
+				message: string;
+				data: string;
+			} = await chunkRes.json();
+
+			if (!chunkData.success) {
+				alert(chunkData.message);
+				throw 'Unable to retrieve chunk auth';
+			}
+
+			// download it from the bridge
+			const chunkDownloadRes = await fetch(
+				`${PUBLIC_B2_BRIDGE_URL}?uuid=${$page.params.id}&auth=${chunkData.data}&chunk=true&chunk_id=${chunk.uuid}&transaction_id=${chunk.transaction_uuid}`
+			);
+
+			const chunkDownloadData = await chunkDownloadRes.arrayBuffer();
+
+			const chunkBytes = new Uint8Array(chunkDownloadData);
+
+			const decryptedChunkBytes = _sodium.crypto_secretstream_xchacha20poly1305_pull(
+				chunkState,
+				chunkBytes,
+				null
+			);
+
+			// append to the file
+			decryptedChunks.push(decryptedChunkBytes.message);
+
+			progress = (i + 1) / totalChunks;
+		}
+
+		// download the file
+
+		// assemble the decrypted chunks
+		const connectedChunks = await uInt8ArrayConcat(decryptedChunks);
+
+		if (!connectedChunks) {
+			alert('Unable to assemble chunks');
+			throw 'Unable to assemble chunks';
+		}
+
+		const blob = new Blob([connectedChunks.buffer], { type: decryptedMime });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+
+		a.href = url;
+
+		a.download = decryptedName;
+
+		document.body.appendChild(a);
+
+		a.click();
+	};
+
 	const downloadFile = async () => {
 		const hashedKey = hashedFileKey;
 		const key = fileKey;
@@ -170,6 +301,11 @@
 		if (!key || !salt || !hashedKey) return;
 
 		isDownloading = true;
+
+		if (metadata.chunk_uploaded) {
+			await chunkDownload();
+			return;
+		}
 
 		const dlRequest = await fetch(
 			`${PUBLIC_API_URL}/download/${$page.params.id}?hashed_key=${hashedKey}`
@@ -276,7 +412,7 @@
 				><p class="abuse">Report Abuse</p></a
 			>
 		{/if}
-        <FooterText />
+		<FooterText />
 	</div>
 </div>
 
