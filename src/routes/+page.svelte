@@ -271,6 +271,11 @@
 			}
 
 			fileContents = await zip.generateAsync({ type: 'arraybuffer' });
+
+			if (fileContents.byteLength > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
+				alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+				return;
+			}
 		}
 
 		const uIntFileContents = new Uint8Array(fileContents);
