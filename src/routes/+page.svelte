@@ -22,6 +22,7 @@
 	// @ts-ignore
 	import QR from 'qrcode';
 	import { splitFilesIntoChunks } from '$lib/utils/chunks';
+	import { onMount } from 'svelte';
 
 	let fileInput: HTMLInputElement;
 
@@ -45,6 +46,20 @@
 	let qrCodeData = '';
 
 	let isDragging = false;
+
+	let isLoggedIn = false;
+
+	onMount(() => {
+		checkLogin();
+	});
+
+	const checkLogin = async () => {
+		const res = await fetch(`${PUBLIC_API_URL}/auth/check`, {
+			credentials: 'include'
+		});
+
+		isLoggedIn = res.ok;
+	};
 
 	const generateKeys = async () => {
 		// get the sodium library
@@ -158,7 +173,8 @@
 		// first, create a transaction
 		const transactionRes = await fetch(`${PUBLIC_API_URL}/transaction`, {
 			method: 'POST',
-			body: formData
+			body: formData,
+			credentials: 'include'
 		});
 
 		const transactionData: {
@@ -387,7 +403,8 @@
 			// @ts-ignore
 			onUploadProgress: (e: { loaded: number; total: number }) => {
 				progress = e.loaded / e.total;
-			}
+			},
+			withCredentials: true
 		});
 
 		const data: {
@@ -411,7 +428,7 @@
 	};
 
 	const turnstileCallback = (token: { detail: { token: string } }) => {
-        if (stage !== "verifying") return;
+		if (stage !== 'verifying') return;
 		turnstileToken = token.detail.token;
 		stage = 'upload';
 	};
@@ -486,6 +503,16 @@
 			</div>
 			{#if showOptions}
 				<div class="options">
+					{#if !isLoggedIn}
+						<div class="option">
+							<p style="font-size: .75rem;">
+								Unlock member-only features by <a
+									href={`${PUBLIC_API_URL}/auth/uri`}
+									style="cursor: pointer;">logging in</a
+								>.
+							</p>
+						</div>
+					{/if}
 					<div class="option">
 						<Check
 							selected={showMaxDownloads}
@@ -499,7 +526,7 @@
 							<input type="number" min="1" max="20" bind:value={maxDownloads} class="input-field" />
 						{/if}
 					</div>
-					<div class="option">
+					<div class="option" style="margin-top: .5rem;">
 						<label for="expires-after">Expires After</label>
 						<select id="expires-after" bind:value={expiresAfter} class="input-field">
 							<option value={3600}>1 Hour</option>
@@ -507,6 +534,7 @@
 							<option value={86400}>1 Day</option>
 							<option value={259200}>3 Days</option>
 							<option value={604800}>1 Week</option>
+							<option value={2629746} disabled={!isLoggedIn}>1 Month (Members Only)</option>
 						</select>
 					</div>
 				</div>
@@ -682,7 +710,7 @@
 				.options-toggle {
 					margin-top: 0.5rem;
 
-					color: #2e2eb3;
+					color: #7070ff;
 
 					display: flex;
 					align-items: center;
