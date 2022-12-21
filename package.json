@@ -35,6 +35,7 @@
 	"dependencies": {
 		"@zerodevx/svelte-toast": "^1.0.0-rc.1",
 		"axios": "^1.2.1",
+		"jszip": "^3.10.1",
 		"libsodium-wrappers": "^0.7.10",
 		"qrcode": "^1.5.1",
 		"svelte-copy": "^1.3.0",

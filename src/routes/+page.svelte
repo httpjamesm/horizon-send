@@ -16,11 +16,10 @@
 
 	import { SvelteToast, toast } from '@zerodevx/svelte-toast';
 	import FooterText from '$lib/FooterText.svelte';
-	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
 
-    import QR from "qrcode";
-    
+	import JSZip from 'jszip';
+
+	import QR from 'qrcode';
 
 	let fileInput: HTMLInputElement;
 
@@ -50,23 +49,45 @@
 		// get the file contents
 		const file = files[0];
 
-		if (file.size > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
-			alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
-			return;
+		let fileContents: ArrayBuffer;
+
+		if (files.length === 1) {
+			if (file.size > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
+				alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+				return;
+			}
+
+			// create reader
+			const reader = new FileReader();
+
+			// read the file
+			reader.readAsArrayBuffer(file);
+
+			// wait for the file to be read
+			await new Promise((resolve) => {
+				reader.onload = resolve;
+			});
+			fileContents = reader.result as ArrayBuffer;
+		} else {
+			// zip the files
+			let zip = new JSZip();
+
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+				if (file.size > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
+					alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+					return;
+				}
+				const reader = new FileReader();
+				reader.readAsArrayBuffer(file);
+				await new Promise((resolve) => {
+					reader.onload = resolve;
+				});
+				zip.file(file.name, reader.result as ArrayBuffer);
+			}
+
+			fileContents = await zip.generateAsync({ type: 'arraybuffer' });
 		}
-
-		// create reader
-		const reader = new FileReader();
-
-		// read the file
-		reader.readAsArrayBuffer(file);
-
-		// wait for the file to be read
-		await new Promise((resolve) => {
-			reader.onload = resolve;
-		});
-
-		const fileContents = reader.result as ArrayBuffer;
 
 		const uIntFileContents = new Uint8Array(fileContents);
 
@@ -115,7 +136,11 @@
 		const headerBase64 = sodium.to_base64(dataHeader, sodium.base64_variants.URLSAFE_NO_PADDING);
 
 		// get the file name
-		const fileName = file.name;
+		let fileName = file.name;
+
+		if (files.length > 1) {
+			fileName = `send-archive-${new Date().getTime()}.zip`;
+		}
 
 		// create a new state for the name
 		const nameState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
@@ -147,9 +172,15 @@
 		// encrypt mime
 		const mimeState = sodium.crypto_secretstream_xchacha20poly1305_init_push(key);
 
+		let mimeType = file.type;
+
+		if (files.length > 1) {
+			mimeType = 'application/zip';
+		}
+
 		const encryptedMime = sodium.crypto_secretstream_xchacha20poly1305_push(
 			mimeState.state,
-			enc.encode(file.type),
+			enc.encode(mimeType),
 			null,
 			sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
 		);
@@ -204,8 +235,7 @@
 
 		progress = 0;
 
-
-        qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`)
+		qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`);
 	};
 
 	const turnstileCallback = (token: { detail: { token: string } }) => {
@@ -344,6 +374,7 @@
 			type="file"
 			id="file"
 			accept="*/*"
+			multiple
 			bind:this={fileInput}
 			on:change={encryptAndUpload}
 		/>
