@@ -42,9 +42,11 @@
 	let showQrCode = false;
 	let qrCodeData = '';
 
+	let isDragging = false;
+
 	// get the file
-	const encryptAndUpload = async (e: Event) => {
-		const files = (<HTMLInputElement>e.target).files;
+	const encryptAndUpload = async (files: FileList) => {
+		// const files = (<HTMLInputElement>e.target).files;
 		if (!files) return;
 		// get the file contents
 		const file = files[0];
@@ -242,6 +244,16 @@
 		turnstileToken = token.detail.token;
 		stage = 'upload';
 	};
+
+	const onDrop = async (e: DragEvent) => {
+		const files = e.dataTransfer?.files;
+
+		if (!files) {
+			return;
+		}
+
+		await encryptAndUpload(files);
+	};
 </script>
 
 <svelte:head>
@@ -252,7 +264,17 @@
 	/>
 </svelte:head>
 
-<div class="parent">
+<div
+	class="parent"
+	on:drop|preventDefault={onDrop}
+	on:dragover|preventDefault
+	on:dragenter={() => {
+		isDragging = true;
+	}}
+	on:dragleave={() => {
+		isDragging = false;
+	}}
+>
 	<div class="container">
 		<h1>Horizon Send</h1>
 		<h2>End-to-end encrypted file sharing.</h2>
@@ -263,14 +285,20 @@
 		{#if stage === 'verifying'}
 			<p class="verifying">Please wait while we verify your humanity...</p>
 		{:else if stage === 'upload'}
-			<button
-				class="upload"
-				on:click={() => {
-					if (!fileInput) return;
-					fileInput.click();
-				}}>Upload Securely</button
-			>
-			<p class="upload-limit">Max {PUBLIC_UPLOAD_LIMIT} MB</p>
+			{#if isDragging}
+				<div class="dropzone">
+					<p>Drop your files here</p>
+				</div>
+			{:else}
+				<button
+					class="upload"
+					on:click={() => {
+						if (!fileInput) return;
+						fileInput.click();
+					}}>Upload Securely</button
+				>
+			{/if}
+			<p class="upload-limit">Max {PUBLIC_UPLOAD_LIMIT} MB • Drag & Drop Supported</p>
 			<div class="options-toggle-parent">
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<div
@@ -376,7 +404,11 @@
 			accept="*/*"
 			multiple
 			bind:this={fileInput}
-			on:change={encryptAndUpload}
+			on:change={async (e) => {
+				// @ts-ignore
+				const files = e.target.files;
+				encryptAndUpload(files);
+			}}
 		/>
 	</div>
 	<div class="disclaimers">
@@ -431,6 +463,20 @@
 			margin: 0 12px;
 			padding: 32px;
 			color: white;
+
+			.dropzone {
+				@extend .upload;
+
+				background-color: transparent !important;
+				font-weight: bold;
+				color: white;
+				border: 3px dashed #2e2eb3 !important;
+
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				text-align: center;
+			}
 
 			.link-parent {
 				display: flex;
