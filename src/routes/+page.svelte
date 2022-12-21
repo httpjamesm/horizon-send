@@ -216,7 +216,7 @@
 		<h2>End-to-end encrypted file sharing.</h2>
 		<p>
 			Horizon Send protects your uploads with zero-knowledge encryption. No one except those you
-			share the link with, including Horizon developers, can access your shared content.
+			share the link with can access your shared content.
 		</p>
 		{#if stage === 'verifying'}
 			<p class="verifying">Please wait while we verify your humanity...</p>
