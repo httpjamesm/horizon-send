@@ -411,6 +411,7 @@
 	};
 
 	const turnstileCallback = (token: { detail: { token: string } }) => {
+        if (stage !== "verifying") return;
 		turnstileToken = token.detail.token;
 		stage = 'upload';
 	};
