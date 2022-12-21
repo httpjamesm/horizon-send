@@ -179,8 +179,15 @@
 		});
 
 		const data: {
+            success: true;
+            message: string;
 			data: string;
 		} = res.data;
+
+        if (!data.success) {
+            alert(data.message);
+            throw `unable to upload file: ${data.message}`;
+        }
 
 		uploadUuid = data.data;
 		uploadKey = `${keyB64}`;
