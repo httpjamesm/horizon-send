@@ -3,7 +3,7 @@
 
 	import axios from 'axios';
 
-	import { PUBLIC_API_URL, PUBLIC_TURNSTILE_KEY, PUBLIC_UPLOAD_LIMIT } from '$env/static/public';
+	import { PUBLIC_API_URL, PUBLIC_TURNSTILE_KEY, PUBLIC_UPLOAD_LIMIT, PUBLIC_EVEREST_UPLOAD_LIMIT } from '$env/static/public';
 
 	import { Turnstile } from 'svelte-turnstile';
 
@@ -48,6 +48,7 @@
 	let isDragging = false;
 
 	let isLoggedIn = false;
+    let isEverest = false;
 
 	onMount(() => {
 		checkLogin();
@@ -58,7 +59,16 @@
 			credentials: 'include'
 		});
 
+        const data: {
+            success: boolean;
+            message: string;
+            data: {
+                supporter: boolean;
+            }
+        } = await res.json();
+
 		isLoggedIn = res.ok;
+        isEverest = data.data.supporter;
 	};
 
 	const generateKeys = async () => {
@@ -242,6 +252,12 @@
 		qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`);
 	};
 
+    const isFileTooLarge = (sizeMb: number) => {
+        const uploadLimit = isEverest ? Number(PUBLIC_EVEREST_UPLOAD_LIMIT) : Number(PUBLIC_UPLOAD_LIMIT);
+
+        return sizeMb > uploadLimit * 1024 * 1024;
+    }
+
 	// get the file
 	const encryptAndUpload = async (files: FileList) => {
 		// const files = (<HTMLInputElement>e.target).files;
@@ -252,8 +268,8 @@
 		let fileContents: ArrayBuffer;
 
 		if (files.length === 1) {
-			if (file.size > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
-				alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+			if (isFileTooLarge(file.size)) {
+				alert(`File size is too large. Max size is ${isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT}MB`);
 				return;
 			}
 
@@ -274,8 +290,8 @@
 
 			for (let i = 0; i < files.length; i++) {
 				const file = files[i];
-				if (file.size > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
-					alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+				if (isFileTooLarge(file.size)) {
+					alert(`File size is too large. Max size is ${isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT}MB`);
 					return;
 				}
 				const reader = new FileReader();
@@ -288,8 +304,8 @@
 
 			fileContents = await zip.generateAsync({ type: 'arraybuffer' });
 
-			if (fileContents.byteLength > Number(PUBLIC_UPLOAD_LIMIT) * 1024 * 1024) {
-				alert(`File size is too large. Max size is ${PUBLIC_UPLOAD_LIMIT}MB`);
+			if (isFileTooLarge(fileContents.byteLength)) {
+				alert(`File size is too large. Max size is ${isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT}MB`);
 				return;
 			}
 		}
@@ -486,7 +502,15 @@
 					}}>Upload Securely</button
 				>
 			{/if}
-			<p class="upload-limit">Max {PUBLIC_UPLOAD_LIMIT} MB • Drag & Drop Supported</p>
+			<p class="upload-limit">Max {isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT} MB • Drag & Drop Supported</p>
+            {#if !isEverest}
+            <p style="font-size: .75rem; text-align: center;">
+                Unlock 10 GB upload limit by <a
+                    href={`${PUBLIC_API_URL}/auth/uri`}
+                    style="cursor: pointer;">logging in</a
+                > with a Horizon Everest account.
+            </p>
+            {/if}
 			<div class="options-toggle-parent">
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<div
