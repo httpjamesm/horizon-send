@@ -1,5 +1,5 @@
 <p>
-	<a href="https://horizon.pics" target="_blank" rel="noopener noreferrer">Horizon</a> •
+	<a href="https://hrzn.cool" target="_blank" rel="noopener noreferrer">Horizon</a> •
 	<a href="https://github.com/httpjamesm/horizon-send" target="_blank" rel="noopener noreferrer"
 		>Source</a
 	>
