@@ -3,7 +3,12 @@
 
 	import axios from 'axios';
 
-	import { PUBLIC_API_URL, PUBLIC_TURNSTILE_KEY, PUBLIC_UPLOAD_LIMIT, PUBLIC_EVEREST_UPLOAD_LIMIT } from '$env/static/public';
+	import {
+		PUBLIC_API_URL,
+		PUBLIC_TURNSTILE_KEY,
+		PUBLIC_UPLOAD_LIMIT,
+		PUBLIC_EVEREST_UPLOAD_LIMIT
+	} from '$env/static/public';
 
 	import { Turnstile } from 'svelte-turnstile';
 
@@ -28,6 +33,7 @@
 
 	let uploadUuid = '';
 	let uploadKey = '';
+	let uploadDeleteKey = '';
 
 	let stage: 'verifying' | 'upload' | 'uploading' | 'finished' = 'verifying';
 
@@ -48,7 +54,7 @@
 	let isDragging = false;
 
 	let isLoggedIn = false;
-    let isEverest = false;
+	let isEverest = false;
 
 	onMount(() => {
 		checkLogin();
@@ -59,16 +65,16 @@
 			credentials: 'include'
 		});
 
-        const data: {
-            success: boolean;
-            message: string;
-            data: {
-                supporter: boolean;
-            }
-        } = await res.json();
+		const data: {
+			success: boolean;
+			message: string;
+			data: {
+				supporter: boolean;
+			};
+		} = await res.json();
 
 		isLoggedIn = res.ok;
-        isEverest = data.data.supporter;
+		isEverest = data.data.supporter;
 	};
 
 	const generateKeys = async () => {
@@ -193,6 +199,7 @@
 			data: {
 				transactionUUID: string;
 				fileUUID: string;
+				deleteKey: string;
 			};
 		} = await transactionRes.json();
 
@@ -245,6 +252,7 @@
 
 		uploadUuid = fileId;
 		uploadKey = `${keyB64}`;
+		uploadDeleteKey = transactionData.data.deleteKey;
 		stage = 'finished';
 
 		progress = 0;
@@ -252,11 +260,13 @@
 		qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`);
 	};
 
-    const isFileTooLarge = (sizeMb: number) => {
-        const uploadLimit = isEverest ? Number(PUBLIC_EVEREST_UPLOAD_LIMIT) : Number(PUBLIC_UPLOAD_LIMIT);
+	const isFileTooLarge = (sizeMb: number) => {
+		const uploadLimit = isEverest
+			? Number(PUBLIC_EVEREST_UPLOAD_LIMIT)
+			: Number(PUBLIC_UPLOAD_LIMIT);
 
-        return sizeMb > uploadLimit * 1024 * 1024;
-    }
+		return sizeMb > uploadLimit * 1024 * 1024;
+	};
 
 	// get the file
 	const encryptAndUpload = async (files: FileList) => {
@@ -269,7 +279,11 @@
 
 		if (files.length === 1) {
 			if (isFileTooLarge(file.size)) {
-				alert(`File size is too large. Max size is ${isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT}MB`);
+				alert(
+					`File size is too large. Max size is ${
+						isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT
+					}MB`
+				);
 				return;
 			}
 
@@ -291,7 +305,11 @@
 			for (let i = 0; i < files.length; i++) {
 				const file = files[i];
 				if (isFileTooLarge(file.size)) {
-					alert(`File size is too large. Max size is ${isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT}MB`);
+					alert(
+						`File size is too large. Max size is ${
+							isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT
+						}MB`
+					);
 					return;
 				}
 				const reader = new FileReader();
@@ -305,7 +323,11 @@
 			fileContents = await zip.generateAsync({ type: 'arraybuffer' });
 
 			if (isFileTooLarge(fileContents.byteLength)) {
-				alert(`File size is too large. Max size is ${isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT}MB`);
+				alert(
+					`File size is too large. Max size is ${
+						isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT
+					}MB`
+				);
 				return;
 			}
 		}
@@ -426,7 +448,10 @@
 		const data: {
 			success: true;
 			message: string;
-			data: string;
+			data: {
+				fileUUID: string;
+				deleteKey: string;
+			};
 		} = res.data;
 
 		if (!data.success) {
@@ -434,13 +459,29 @@
 			throw `unable to upload file: ${data.message}`;
 		}
 
-		uploadUuid = data.data;
+		uploadUuid = data.data.fileUUID;
 		uploadKey = `${keyB64}`;
+		uploadDeleteKey = data.data.deleteKey;
 		stage = 'finished';
 
 		progress = 0;
 
 		qrCodeData = await QR.toDataURL(`${window.location.href}download/${uploadUuid}#${uploadKey}`);
+	};
+
+	const undoUpload = async () => {
+		if (!uploadDeleteKey) return;
+
+		const res = await fetch(`${PUBLIC_API_URL}/file/${uploadDeleteKey}`, {
+			method: 'DELETE'
+		});
+
+		if (!res.ok) {
+			alert('Unable to undo upload');
+			return;
+		}
+
+		window.location.reload();
 	};
 
 	const turnstileCallback = (token: { detail: { token: string } }) => {
@@ -502,15 +543,17 @@
 					}}>Upload Securely</button
 				>
 			{/if}
-			<p class="upload-limit">Max {isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT} MB • Drag & Drop Supported</p>
-            {#if !isEverest}
-            <p style="font-size: .75rem; text-align: center;">
-                Unlock 10 GB upload limit by <a
-                    href={`${PUBLIC_API_URL}/auth/uri`}
-                    style="cursor: pointer;">logging in</a
-                > with a Horizon Everest account.
-            </p>
-            {/if}
+			<p class="upload-limit">
+				Max {isEverest ? PUBLIC_EVEREST_UPLOAD_LIMIT : PUBLIC_UPLOAD_LIMIT} MB • Drag & Drop Supported
+			</p>
+			{#if !isEverest}
+				<p style="font-size: .75rem; text-align: center;">
+					Unlock 10 GB upload limit by <a
+						href={`${PUBLIC_API_URL}/auth/uri`}
+						style="cursor: pointer;">logging in</a
+					> with a Horizon Everest account.
+				</p>
+			{/if}
 			<div class="options-toggle-parent">
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<div
@@ -616,6 +659,7 @@
 					window.location.reload();
 				}}>Upload Another</button
 			>
+			<button class="upload danger" on:click={undoUpload}>Undo Upload</button>
 		{/if}
 
 		<Turnstile siteKey={PUBLIC_TURNSTILE_KEY} on:turnstile-callback={turnstileCallback} />
@@ -810,9 +854,15 @@
 				box-sizing: border-box;
 				height: 3rem;
 				margin-top: 1rem;
+				font-size: 0.8rem;
 
 				&:hover {
 					background-color: #3e3eb3;
+				}
+
+				&.danger {
+					background-color: rgb(255, 123, 123);
+					color: black;
 				}
 			}
 
