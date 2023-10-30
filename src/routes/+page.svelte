@@ -1,5 +1,5 @@
 <script lang="ts">
-	import _sodium from 'libsodium-wrappers';
+	import _sodium from 'libsodium-wrappers-sumo';
 
 	import axios from 'axios';
 
@@ -89,7 +89,7 @@
 		const keyB64 = sodium.to_base64(key, sodium.base64_variants.URLSAFE_NO_PADDING);
 
 		// create random salt
-		const saltBytes = sodium.randombytes_buf(sodium.crypto_pwhash_SALTBYTES);
+		const saltBytes = sodium.randombytes_buf(_sodium.crypto_pwhash_SALTBYTES);
 
 		// convert saltBytes to b64
 		const saltB64 = sodium.to_base64(saltBytes, sodium.base64_variants.URLSAFE_NO_PADDING);
@@ -351,7 +351,6 @@
 			await chunkUpload(fileName, mimeType, fileContents);
 			return;
 		}
-
 		const { key, keyB64, saltB64, hashedKeyString } = await generateKeys();
 
 		await _sodium.ready;

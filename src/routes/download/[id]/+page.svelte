@@ -1,5 +1,5 @@
 <script lang="ts">
-	import _sodium from 'libsodium-wrappers';
+	import _sodium from 'libsodium-wrappers-sumo';
 
 	import { page } from '$app/stores';
 
